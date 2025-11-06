@@ -13,9 +13,9 @@ class RateLimiter:
         self.refill_rate = refill_rate  
         self.ttl = ttl
         
-    def allow_request(self, key: str) -> tuple(bool, float, float):
+    async def allow_request(self, key: str) -> tuple(bool, float, float):
         try: 
-            data = self.redis.hgetall(key)
+            data = await self.redis_client.hgetall(key)
         except Exception as e:
             print(f"Redis error: {e}")
             return True, self.capacity, time.time()
@@ -35,7 +35,7 @@ class RateLimiter:
             return False, tokens, last_refill
         else:
             tokens -= 1
-            self.redis_client.hset(key, mapping={
+            await self.redis_client.hset(key, mapping={
                 "tokens": tokens,
                 "last_refill": last_refill
             })

@@ -19,10 +19,15 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         
         client_ip = request.client.host
         key = f"rate_limit:{client_ip}"
-        allowed,tokens,last_refill = self.rate_limiter.allow_request(key)
+        allowed, tokens, last_refill = await self.rate_limiter.allow_request(key)
         if not allowed:
             await self.log_msg(f"Rate limit hit for {client_ip}")
-            return Response("Too Many Requests", status_code=429)
+            headers = {
+                "Retry-After": f"{int(last_refill + self.rate_limiter.ttl - time.time())}",
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": f"{int(last_refill + self.rate_limiter.ttl)}",
+            }
+            return Response("Too Many Requests", status_code=429,headers=headers)
         
         start = time.time()
         response = await call_next(request)

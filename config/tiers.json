@@ -1,17 +1,44 @@
 {
   "free": {
-    "base": { "capacity": 10, "refill_rate": 1 },
-    "burst": { "capacity": 20 },
+    "base": { 
+      "capacity": 10, 
+      "refill_rate": 1 
+    },
+    "burst": { 
+      "capacity": 20
+    },
+    "degraded": { 
+      "capacity": 2, 
+      "refill_rate": 0.1 
+    },
     "ttl": 30
   },
   "pro": {
-    "base": { "capacity": 100, "refill_rate": 5 },
-    "burst": { "capacity": 150 },
+    "base": { 
+      "capacity": 100, 
+      "refill_rate": 5 
+    },
+    "burst": { 
+      "capacity": 150
+    },
+    "degraded": { 
+      "capacity": 100, 
+      "refill_rate": 5 
+    },
     "ttl": 60
   },
   "enterprise": {
-    "base": { "capacity": 1000, "refill_rate": 20 },
-    "burst": { "capacity": 1000 },
+    "base": { 
+      "capacity": 1000, 
+      "refill_rate": 20 
+    },
+    "burst": { 
+      "capacity": 1000
+    },
+    "degraded": { 
+      "capacity": 1000, 
+      "refill_rate": 20 
+    },
     "ttl": 120
   }
 }

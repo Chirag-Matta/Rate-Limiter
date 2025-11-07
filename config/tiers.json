@@ -1,0 +1,17 @@
+{
+  "free": {
+    "base": { "capacity": 10, "refill_rate": 1 },
+    "burst": { "capacity": 20 },
+    "ttl": 30
+  },
+  "pro": {
+    "base": { "capacity": 100, "refill_rate": 5 },
+    "burst": { "capacity": 150 },
+    "ttl": 60
+  },
+  "enterprise": {
+    "base": { "capacity": 1000, "refill_rate": 20 },
+    "burst": { "capacity": 1000 },
+    "ttl": 120
+  }
+}

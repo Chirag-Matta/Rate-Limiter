@@ -5,6 +5,7 @@ from collections import defaultdict
 from typing import Dict
 from redis import asyncio as aioredis
 from core.rate_limiter import RateLimiter
+from core.config import ConfigManager
 from middleware.rate_limiter_mw import RateLimiterMiddleware
 
 app = FastAPI()
@@ -16,7 +17,7 @@ async def startup_event():
     app.state.rate_limiter = RateLimiter(app.state.redis)
     print("[INIT] Redis connected & middleware added ✅")
     
-app.add_middleware(RateLimiterMiddleware, rate_limiter=None)
+app.add_middleware(RateLimiterMiddleware, rate_limiter=None, config_manager=None)
 
 
 @app.on_event("shutdown")

@@ -1,6 +1,5 @@
 {
-    "free_key": "free",
-    "pro_key": "pro",
-    "enterprise_key": "enterprise"
+    "free": "free",
+    "pro": "pro",
+    "enterprise": "enterprise"
 }
-    

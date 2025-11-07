@@ -13,7 +13,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         self.config_manager = config_manager
     
     async def log_msg(self, message: str):
-        print(f"[LOG]: {message}")
+        print(f"[MIDDLEWARE]: {message}")
         
     def _extract_api_key(self, request: Request) -> Optional[str]:
         return request.headers.get("X-API-Key")
@@ -27,19 +27,26 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             self.config_manager = request.app.state.config_manager
         
         api_key = self._extract_api_key(request)
-        tier = self.config_manager.get_api_key_tier(api_key) or self.rate_limiter.default_tier
+        tier = self.config_manager.get_api_key_tier(api_key)
+        
+        # Important: Don't override with default if tier is found
+        if tier is None:
+            tier = self.rate_limiter.default_tier
+            await self.log_msg(f"No API key provided, using default tier: {tier}")
+        else:
+            await self.log_msg(f"API key detected, tier: {tier}")
         
         client_ip = request.client.host
         # Use API key as the rate limit key if provided, otherwise use IP
         rate_limit_key = api_key if api_key else client_ip
         
-        await self.log_msg(f"Request from {client_ip}, tier: {tier}, key: {rate_limit_key}")
+        await self.log_msg(f"Request from {client_ip}, tier: {tier}, rate_limit_key: {rate_limit_key}")
         
         # Check rate limit with system health awareness
         allowed, tokens, last_used, capacity, health = await self.rate_limiter.allow_request(rate_limit_key, tier)
         
         if not allowed:
-            await self.log_msg(f"Rate limit hit for {client_ip} (tier: {tier}, health: {health.value})")
+            await self.log_msg(f"❌ Rate limit hit for {rate_limit_key} (tier: {tier}, health: {health.value}, tokens: {tokens:.2f})")
             
             # Calculate retry time based on refill rate
             tier_config = self.config_manager.get_tiers()[tier]
@@ -71,6 +78,6 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         response.headers["X-RateLimit-Tier"] = tier
         response.headers["X-System-Health"] = health.value
         
-        await self.log_msg(f"Processed request from {client_ip} (tier: {tier}, health: {health.value}) in {processing_time:.4f}s")
+        await self.log_msg(f"✓ Request processed from {client_ip} (tier: {tier}, health: {health.value}, remaining: {tokens:.2f}/{capacity}) in {processing_time:.4f}s")
         
         return response

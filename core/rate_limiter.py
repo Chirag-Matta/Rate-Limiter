@@ -19,7 +19,7 @@ class RateLimiter:
         """
         Get appropriate limits based on tier config and system health.
         
-        NORMAL: Use burst capacity to maximize utilization
+        NORMAL: Use burst capacity with HIGH refill rate for quick bursts
         DEGRADED: Use degraded limits for free tier, base for paid tiers
         """
         ttl = int(tier_cfg.get("ttl", 60))
@@ -31,11 +31,16 @@ class RateLimiter:
             capacity = float(limit_config["capacity"])
             refill = float(limit_config.get("refill_rate", base_config["refill_rate"]))
         else:
-            # In normal state: use burst capacity to maximize utilization
+            # In normal state: use burst capacity
             burst_config = tier_cfg.get("burst", {})
             capacity = float(burst_config.get("capacity", base_config["capacity"]))
-            # Burst uses base refill rate (we only increase capacity, not refill speed)
-            refill = float(base_config["refill_rate"])
+            
+            # OPTION 1 (RECOMMENDED): High refill rate for true burst capability
+            # Use a multiplier of the base refill rate or set to capacity for instant refill
+            refill = float(base_config["refill_rate"]) * 10  # 10x faster refill during burst
+            
+            # OPTION 2: Instant refill (uncomment to use)
+            # refill = capacity  # Refills to full capacity in 1 second
         
         print(f"[DEBUG] Tier limits - Health: {health.value}, Capacity: {capacity}, Refill: {refill}")
         
@@ -83,7 +88,7 @@ class RateLimiter:
             # Cap at current capacity (handles capacity changes due to health state)
             tokens = min(capacity, refilled_tokens)
             
-            print(f"[DEBUG] Token state - Before: {tokens:.2f}, Elapsed: {elapsed_time:.2f}s, Refilled: {refilled_tokens:.2f}, Capacity: {capacity}, After refill: {tokens:.2f}")
+            print(f"[DEBUG] Token state - Before: {tokens:.2f}, Elapsed: {elapsed_time:.2f}s, Refill rate: {refill_rate}, Added: {elapsed_time * refill_rate:.2f}, After refill: {tokens:.2f}")
             
             if tokens < 1:
                 return False, tokens, last_used, capacity, health

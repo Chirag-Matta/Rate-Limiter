@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, Response, HTTPException, Header
 from pydantic import BaseModel
 import time
+import os
 from typing import Optional
 from redis import asyncio as aioredis
 from core.rate_limiter import RateLimiter
@@ -10,16 +11,40 @@ from middleware.rate_limiter_mw import RateLimiterMiddleware
 
 app = FastAPI()
 
-# Admin authentication token (in production, use proper auth)
-ADMIN_TOKEN = "admin_secret_token_change_in_production"
+# Admin authentication token (load from environment variable)
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "admin_secret_token_change_in_production")
+
+# Redis URL from environment
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 class HealthStatusUpdate(BaseModel):
     status: SystemHealth
 
 @app.on_event("startup")
 async def startup_event():
-    # Initialize shared Redis client
-    app.state.redis = await aioredis.from_url("redis://localhost")
+    # Initialize shared Redis client with retry logic
+    max_retries = 5
+    retry_delay = 2
+    
+    for attempt in range(max_retries):
+        try:
+            app.state.redis = await aioredis.from_url(
+                REDIS_URL,
+                encoding="utf-8",
+                decode_responses=False
+            )
+            # Test connection
+            await app.state.redis.ping()
+            print(f"[INIT] Redis connected successfully at {REDIS_URL} ✅")
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"[INIT] Redis connection attempt {attempt + 1} failed: {e}")
+                print(f"[INIT] Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                print(f"[INIT] Failed to connect to Redis after {max_retries} attempts ❌")
+                raise
     
     # Initialize config manager
     app.state.config_manager = ConfigManager()
@@ -38,7 +63,7 @@ async def startup_event():
     # Set initial system health to NORMAL
     await app.state.health_manager.set_health(SystemHealth.NORMAL)
     
-    print("[INIT] Redis connected & components initialized ✅")
+    print("[INIT] Components initialized ✅")
     print("[INIT] System health set to NORMAL ✅")
 
 # Add middleware after defining app

@@ -26,16 +26,13 @@ class RateLimiter:
         base_config = tier_cfg["base"]
         
         if health == SystemHealth.DEGRADED:
-            # In degraded state: use degraded config if available, otherwise base
             limit_config = tier_cfg.get("degraded", base_config)
             capacity = float(limit_config["capacity"])
             refill = float(limit_config.get("refill_rate", base_config["refill_rate"]))
             print(f"[DEBUG] DEGRADED mode - Tier: {tier}, Capacity: {capacity}, Refill: {refill}")
         else:
-            # In normal state: use burst capacity to maximize utilization
             burst_config = tier_cfg.get("burst", {})
             capacity = float(burst_config.get("capacity", base_config["capacity"]))
-            # Burst uses base refill rate (we only increase capacity, not refill speed)
             refill = float(base_config["refill_rate"])
             print(f"[DEBUG] NORMAL mode - Tier: {tier}, Burst Capacity: {capacity}, Refill: {refill}")
         
@@ -48,11 +45,9 @@ class RateLimiter:
         Returns: (allowed, tokens_remaining, last_used, capacity, health)
         """
         
-        # Get current system health
         health = await self.health_manager.get_health()
         print(f"[DEBUG] Current system health: {health.value}")
         
-        # Get tier configuration
         tiers = self.config_manager.get_tiers()
         tier_cfg = tiers.get(tier)
         
@@ -63,7 +58,6 @@ class RateLimiter:
         
         print(f"[DEBUG] Processing request for tier: {tier}")
         
-        # Get limits based on system health
         capacity, refill_rate, ttl = self._get_limits(tier, tier_cfg, health)
         
         key = f"rate_limit:{api_key}"
@@ -77,7 +71,6 @@ class RateLimiter:
         current_time = time.time()
         
         if not data:
-            # First request - start with full capacity minus one
             tokens = capacity - 1
             last_used = current_time
             print(f"[DEBUG] First request - Starting with {tokens}/{capacity} tokens")
@@ -85,12 +78,10 @@ class RateLimiter:
             tokens = float(data.get(b"tokens", b"0").decode())
             last_used = float(data.get(b"last_used", b"0").decode())
             
-            # Refill tokens based on elapsed time
             elapsed_time = current_time - last_used
             refilled_tokens = tokens + (elapsed_time * refill_rate)
             
-            # Cap at current capacity (handles capacity changes due to health state)
-            tokens = min(capacity, refilled_tokens)
+            tokens = min(refill_rate, refilled_tokens)
             
             print(f"[DEBUG] Token state - Before: {tokens:.2f}, Elapsed: {elapsed_time:.2f}s, Refilled: {refilled_tokens:.2f}, Capacity: {capacity}, After refill: {tokens:.2f}")
             
@@ -101,10 +92,9 @@ class RateLimiter:
             tokens -= 1
             last_used = current_time
         
-        # Store updated state
         await self.redis_client.hset(key, mapping={
             "tokens": str(tokens),
-            "last_used": str(last_used)
+            "last_used": str(current_time)
         })
         await self.redis_client.expire(key, ttl)
         

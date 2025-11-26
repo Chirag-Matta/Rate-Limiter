@@ -20,7 +20,6 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         
     async def dispatch(self, request: Request, call_next):
         
-        # Initialize from app state if not set
         if not self.rate_limiter:
             self.rate_limiter = request.app.state.rate_limiter
         if not self.config_manager:
@@ -29,7 +28,6 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         api_key = self._extract_api_key(request)
         tier = self.config_manager.get_api_key_tier(api_key)
         
-        # Important: Don't override with default if tier is found
         if tier is None:
             tier = self.rate_limiter.default_tier
             await self.log_msg(f"No API key provided, using default tier: {tier}")
@@ -37,18 +35,15 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
             await self.log_msg(f"API key detected, tier: {tier}")
         
         client_ip = request.client.host
-        # Use API key as the rate limit key if provided, otherwise use IP
         rate_limit_key = api_key if api_key else client_ip
         
         await self.log_msg(f"Request from {client_ip}, tier: {tier}, rate_limit_key: {rate_limit_key}")
         
-        # Check rate limit with system health awareness
         allowed, tokens, last_used, capacity, health = await self.rate_limiter.allow_request(rate_limit_key, tier)
         
         if not allowed:
             await self.log_msg(f"❌ Rate limit hit for {rate_limit_key} (tier: {tier}, health: {health.value}, tokens: {tokens:.2f})")
             
-            # Calculate retry time based on refill rate
             tier_config = self.config_manager.get_tiers()[tier]
             if health == SystemHealth.DEGRADED:
                 refill_rate = tier_config.get("degraded", tier_config["base"])["refill_rate"]
@@ -71,11 +66,10 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         processing_time = time.time() - start
         
-        # Add rate limit and system info headers
         response.headers["X-Processing-Time"] = f"{processing_time:.4f}s"
         response.headers["X-RateLimit-Limit"] = str(int(capacity))
         response.headers["X-RateLimit-Remaining"] = str(max(0, int(tokens)))
-        response.headers["X-RateLimit-Tier"] = tier
+        response.headers["X-RateLimit-Tier"] = api_key
         response.headers["X-System-Health"] = health.value
         
         await self.log_msg(f"✓ Request processed from {client_ip} (tier: {tier}, health: {health.value}, remaining: {tokens:.2f}/{capacity}) in {processing_time:.4f}s")
